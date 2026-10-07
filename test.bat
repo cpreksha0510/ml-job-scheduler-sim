@@ -7,13 +7,14 @@ REM    test.bat
 REM
 REM  Strategy:
 REM    1. Build sim.exe via build.bat (fails fast if compilation breaks).
-REM    2. Build and run tests\test_fcfs  (FCFS unit tests, plain asserts).
-REM    3. Build and run tests\test_sjf   (SJF unit tests, plain asserts).
-REM    4. Build and run tests\test_srtf  (SRTF unit tests, plain asserts).
-REM    5. Build and run tests\test_rr    (Round Robin unit tests, plain asserts).
-REM    6. Run smoke test: sim.exe against data/sample_jobs.csv.
-REM    7. Run edge cases: missing CSV arg, non-existent file.
-REM    8. Print PASS/FAIL summary and exit non-zero if any test failed.
+REM    2. Build and run tests\test_fcfs    (FCFS unit tests, plain asserts).
+REM    3. Build and run tests\test_sjf     (SJF unit tests, plain asserts).
+REM    4. Build and run tests\test_srtf    (SRTF unit tests, plain asserts).
+REM    5. Build and run tests\test_rr      (Round Robin unit tests, plain asserts).
+REM    6. Build and run tests\test_metrics (Metrics module unit tests).
+REM    7. Run smoke test: sim.exe against data/sample_jobs.csv.
+REM    8. Run edge cases: missing CSV arg, non-existent file.
+REM    9. Print PASS/FAIL summary and exit non-zero if any test failed.
 REM
 REM  Exit codes:  0 = all tests passed, 1 = one or more tests failed.
 REM ============================================================================
@@ -69,7 +70,7 @@ REM ----------------------------------------------------------------------------
 REM  Step 2: Build and run FCFS unit tests
 REM ----------------------------------------------------------------------------
 echo --- Step 2: FCFS unit tests ---
-g++ -std=c++14 -Wall -Wextra -Iinclude -Isrc src\simulator.cpp src\policies\fcfs.cpp tests\test_fcfs.cpp -o test_fcfs
+g++ -std=c++14 -Wall -Wextra -Iinclude -Isrc src\simulator.cpp src\metrics.cpp src\policies\fcfs.cpp tests\test_fcfs.cpp -o test_fcfs
 if %ERRORLEVEL% NEQ 0 goto :fcfs_compile_fail
 
 test_fcfs.exe
@@ -94,7 +95,7 @@ REM ----------------------------------------------------------------------------
 REM  Step 3: Build and run SJF unit tests
 REM ----------------------------------------------------------------------------
 echo --- Step 3: SJF unit tests ---
-g++ -std=c++14 -Wall -Wextra -Iinclude -Isrc src\simulator.cpp src\policies\sjf.cpp tests\test_sjf.cpp -o test_sjf
+g++ -std=c++14 -Wall -Wextra -Iinclude -Isrc src\simulator.cpp src\metrics.cpp src\policies\sjf.cpp tests\test_sjf.cpp -o test_sjf
 if %ERRORLEVEL% NEQ 0 goto :sjf_compile_fail
 
 test_sjf.exe
@@ -119,7 +120,7 @@ REM ----------------------------------------------------------------------------
 REM  Step 4: Build and run SRTF unit tests
 REM ----------------------------------------------------------------------------
 echo --- Step 4: SRTF unit tests ---
-g++ -std=c++14 -Wall -Wextra -Iinclude -Isrc src\simulator.cpp src\policies\srtf.cpp tests\test_srtf.cpp -o test_srtf
+g++ -std=c++14 -Wall -Wextra -Iinclude -Isrc src\simulator.cpp src\metrics.cpp src\policies\srtf.cpp tests\test_srtf.cpp -o test_srtf
 if %ERRORLEVEL% NEQ 0 goto :srtf_compile_fail
 
 test_srtf.exe
@@ -144,7 +145,7 @@ REM ----------------------------------------------------------------------------
 REM  Step 5: Build and run Round Robin unit tests
 REM ----------------------------------------------------------------------------
 echo --- Step 5: Round Robin unit tests ---
-g++ -std=c++14 -Wall -Wextra -Iinclude -Isrc src\simulator.cpp src\policies\rr.cpp tests\test_rr.cpp -o test_rr
+g++ -std=c++14 -Wall -Wextra -Iinclude -Isrc src\simulator.cpp src\metrics.cpp src\policies\rr.cpp tests\test_rr.cpp -o test_rr
 if %ERRORLEVEL% NEQ 0 goto :rr_compile_fail
 
 test_rr.exe
@@ -163,6 +164,31 @@ goto :rr_done
 set /a PASS+=1
 
 :rr_done
+echo.
+
+REM ----------------------------------------------------------------------------
+REM  Step 6: Build and run Metrics unit tests
+REM ----------------------------------------------------------------------------
+echo --- Step 6: Metrics unit tests ---
+g++ -std=c++14 -Wall -Wextra -Iinclude -Isrc src\simulator.cpp src\metrics.cpp src\policies\fcfs.cpp src\policies\rr.cpp tests\test_metrics.cpp -o test_metrics
+if %ERRORLEVEL% NEQ 0 goto :metrics_compile_fail
+
+test_metrics.exe
+if %ERRORLEVEL% EQU 0 goto :metrics_pass
+
+echo [FAIL] test_metrics returned a non-zero exit code.
+set /a FAIL+=1
+goto :metrics_done
+
+:metrics_compile_fail
+echo [FAIL] test_metrics.cpp failed to compile.
+set /a FAIL+=1
+goto :metrics_done
+
+:metrics_pass
+set /a PASS+=1
+
+:metrics_done
 echo.
 
 REM ----------------------------------------------------------------------------

@@ -25,6 +25,16 @@ struct TickEvent {
 };
 
 // ---------------------------------------------------------------------------
+//  ExecutionSegment  –  contiguous execution segment of a job [start_tick, end_tick)
+// ---------------------------------------------------------------------------
+struct ExecutionSegment {
+    uint32_t job_id;
+    JobClass job_class;
+    int64_t  start_tick;
+    int64_t  end_tick;
+};
+
+// ---------------------------------------------------------------------------
 //  Simulator
 // ---------------------------------------------------------------------------
 class Simulator {
@@ -63,6 +73,9 @@ public:
     /// Jobs that did not complete before max_ticks.
     const std::vector<Job>& incomplete_jobs() const noexcept { return incomplete_; }
 
+    /// Contiguous execution segments (merged consecutive ticks), populated after run().
+    const std::vector<ExecutionSegment>& execution_segments() const noexcept { return segments_; }
+
     // ── Optional tick callback (for live output) ──────────────────────────────
     using TickCallback = std::function<void(const TickEvent&, const Job*)>;
     void set_tick_callback(TickCallback cb) { tick_cb_ = std::move(cb); }
@@ -89,6 +102,7 @@ private:
     int64_t current_tick_ = 0;
 
     std::vector<TickEvent> timeline_;
+    std::vector<ExecutionSegment> segments_;
     TickCallback tick_cb_;
 };
 

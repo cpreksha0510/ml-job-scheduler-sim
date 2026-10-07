@@ -3,10 +3,11 @@
 //
 //  Build:
 //    g++ -std=c++14 -Wall -Wextra -Iinclude -Isrc
-//        src/simulator.cpp src/policies/sjf.cpp tests/test_sjf.cpp
+//        src/simulator.cpp src/metrics.cpp src/policies/sjf.cpp tests/test_sjf.cpp
 //        -o test_sjf
 // ============================================================================
 #include "simulator.hpp"
+#include "metrics.hpp"
 #include "policies/sjf.hpp"
 
 #include <cmath>
@@ -55,36 +56,20 @@ static void test_sjf_5job() {
     sim.set_jobs(make_5job_workload());
     sim.run(10000);
 
-    const auto& done = sim.completed_jobs();
-    CHECK(done.size() == 5);
-    if (done.size() != 5) return;
-
-    std::vector<const mlsched::Job*> by_id(6, nullptr);
-    for (const auto& j : done) {
-        by_id[j.id] = &j;
-    }
-
-    double total_wait = 0.0;
-    double total_ta   = 0.0;
+    auto metrics = mlsched::Metrics::calculate(sim, "SJF");
+    CHECK(metrics.job_metrics().size() == 5);
+    if (metrics.job_metrics().size() != 5) return;
 
     for (int i = 0; i < 5; ++i) {
         uint32_t id = static_cast<uint32_t>(i + 1);
-        const mlsched::Job* j = by_id[id];
-        CHECK(j != nullptr);
-        if (!j) continue;
+        const auto& jm = metrics.job_metric(id);
 
-        int64_t wt = j->waiting_time();
-        int64_t ta = j->turnaround_time();
-
-        CHECK(wt == exp_wait[i]);
-        CHECK(ta == exp_turnaround[i]);
-
-        total_wait += static_cast<double>(wt);
-        total_ta   += static_cast<double>(ta);
+        CHECK(jm.waiting_time == exp_wait[i]);
+        CHECK(jm.turnaround_time == exp_turnaround[i]);
     }
 
-    int avg_wait_x10 = static_cast<int>(std::round((total_wait / 5.0) * 10.0));
-    int avg_ta_x10   = static_cast<int>(std::round((total_ta / 5.0) * 10.0));
+    int avg_wait_x10 = static_cast<int>(std::round(metrics.overall().avg_waiting_time * 10.0));
+    int avg_ta_x10   = static_cast<int>(std::round(metrics.overall().avg_turnaround_time * 10.0));
 
     CHECK(avg_wait_x10 == 56);   // avg 5.6
     CHECK(avg_ta_x10   == 104);  // avg 10.4
@@ -100,21 +85,17 @@ static void test_sjf_simultaneous_arrivals() {
 
     auto sched = std::unique_ptr<mlsched::Scheduler>(new mlsched::Sjf());
     mlsched::Simulator sim(std::move(sched));
-    // J1 burst 4, J2 burst 4 arrived at tick 0 -> tie broken by id: J1 runs first
     sim.add_job(Job::make(1, JobClass::Training, 0, 4, 0, -1, 0, "J1"));
     sim.add_job(Job::make(2, JobClass::Training, 0, 4, 0, -1, 0, "J2"));
     sim.run(100);
 
-    const auto& done = sim.completed_jobs();
-    CHECK(done.size() == 2);
-    if (done.size() == 2) {
-        std::vector<const Job*> by_id(3, nullptr);
-        for (const auto& j : done) by_id[j.id] = &j;
-
-        CHECK(by_id[1]->waiting_time() == 0);
-        CHECK(by_id[1]->turnaround_time() == 4);
-        CHECK(by_id[2]->waiting_time() == 4);
-        CHECK(by_id[2]->turnaround_time() == 8);
+    auto metrics = mlsched::Metrics::calculate(sim);
+    CHECK(metrics.job_metrics().size() == 2);
+    if (metrics.job_metrics().size() == 2) {
+        CHECK(metrics.job_metric(1).waiting_time == 0);
+        CHECK(metrics.job_metric(1).turnaround_time == 4);
+        CHECK(metrics.job_metric(2).waiting_time == 4);
+        CHECK(metrics.job_metric(2).turnaround_time == 8);
     }
 }
 
@@ -133,20 +114,17 @@ static void test_sjf_identical_jobs() {
     sim.add_job(Job::make(3, JobClass::Training, 0, 3, 0, -1, 0, "J3"));
     sim.run(100);
 
-    const auto& done = sim.completed_jobs();
-    CHECK(done.size() == 3);
-    if (done.size() == 3) {
-        std::vector<const Job*> by_id(4, nullptr);
-        for (const auto& j : done) by_id[j.id] = &j;
+    auto metrics = mlsched::Metrics::calculate(sim);
+    CHECK(metrics.job_metrics().size() == 3);
+    if (metrics.job_metrics().size() == 3) {
+        CHECK(metrics.job_metric(1).waiting_time == 0);
+        CHECK(metrics.job_metric(1).turnaround_time == 3);
 
-        CHECK(by_id[1]->waiting_time() == 0);
-        CHECK(by_id[1]->turnaround_time() == 3);
+        CHECK(metrics.job_metric(2).waiting_time == 3);
+        CHECK(metrics.job_metric(2).turnaround_time == 6);
 
-        CHECK(by_id[2]->waiting_time() == 3);
-        CHECK(by_id[2]->turnaround_time() == 6);
-
-        CHECK(by_id[3]->waiting_time() == 6);
-        CHECK(by_id[3]->turnaround_time() == 9);
+        CHECK(metrics.job_metric(3).waiting_time == 6);
+        CHECK(metrics.job_metric(3).turnaround_time == 9);
     }
 }
 
@@ -164,11 +142,10 @@ static void test_sjf_zero_burst() {
     int64_t ticks = sim.run(50);
 
     CHECK(ticks <= 2);
-    const auto& done = sim.completed_jobs();
-    CHECK(done.size() == 1);
-    if (done.size() == 1) {
-        CHECK(done[0].waiting_time() == 0);
-        CHECK(done[0].is_complete());
+    auto metrics = mlsched::Metrics::calculate(sim);
+    CHECK(metrics.job_metrics().size() == 1);
+    if (metrics.job_metrics().size() == 1) {
+        CHECK(metrics.job_metric(1).waiting_time == 0);
     }
 }
 

@@ -33,6 +33,7 @@ void Simulator::set_jobs(std::vector<Job> jobs) {
     running_ = nullptr;
     current_tick_ = 0;
     timeline_.clear();
+    segments_.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -106,6 +107,16 @@ int64_t Simulator::run(int64_t max_ticks) {
                          chosen->remaining};
             timeline_.push_back(ev);
             if (tick_cb_) tick_cb_(ev, chosen);
+
+            // Record execution segment (merging consecutive ticks of the same job).
+            if (!segments_.empty() && segments_.back().job_id == chosen->id &&
+                segments_.back().end_tick == current_tick_)
+            {
+                segments_.back().end_tick = current_tick_ + 1;
+            } else {
+                segments_.push_back(ExecutionSegment{chosen->id, chosen->job_class,
+                                                     current_tick_, current_tick_ + 1});
+            }
 
         } else {
             // Idle tick.
