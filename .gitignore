@@ -1,0 +1,26 @@
+# CMake build directories
+build/
+build_*/
+cmake-build-*/
+out/
+
+# Compiled binaries
+*.exe
+*.out
+*.o
+*.a
+*.lib
+*.dll
+
+# IDE / editor
+.vscode/
+.idea/
+*.user
+*.suo
+*.sln.docstates
+*.VC.db
+*.VC.opendb
+
+# OS
+Thumbs.db
+.DS_Store

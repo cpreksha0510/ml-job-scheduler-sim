@@ -1,0 +1,6 @@
+id,class,arrival,burst,priority,deadline,mem_req,label
+1,inference,0,4,10,10,512,Infer-A
+2,training,1,8,2,-1,2048,Train-B
+3,preprocessing,2,3,5,-1,256,Prep-C
+4,inference,3,2,10,8,512,Infer-D
+5,training,0,6,2,-1,4096,Train-E
