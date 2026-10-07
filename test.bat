@@ -7,14 +7,15 @@ REM    test.bat
 REM
 REM  Strategy:
 REM    1. Build sim.exe via build.bat (fails fast if compilation breaks).
-REM    2. Build and run tests\test_fcfs    (FCFS unit tests, plain asserts).
-REM    3. Build and run tests\test_sjf     (SJF unit tests, plain asserts).
-REM    4. Build and run tests\test_srtf    (SRTF unit tests, plain asserts).
-REM    5. Build and run tests\test_rr      (Round Robin unit tests, plain asserts).
-REM    6. Build and run tests\test_metrics (Metrics module unit tests).
-REM    7. Run smoke test: sim.exe against data/sample_jobs.csv.
-REM    8. Run edge cases: missing CSV arg, non-existent file.
-REM    9. Print PASS/FAIL summary and exit non-zero if any test failed.
+REM    2. Build and run tests\test_fcfs      (FCFS unit tests, plain asserts).
+REM    3. Build and run tests\test_sjf       (SJF unit tests, plain asserts).
+REM    4. Build and run tests\test_srtf      (SRTF unit tests, plain asserts).
+REM    5. Build and run tests\test_rr        (Round Robin unit tests, plain asserts).
+REM    6. Build and run tests\test_metrics   (Metrics module unit tests).
+REM    7. Build and run tests\test_workload  (WorkloadGenerator unit tests).
+REM    8. Run smoke tests: sim.exe on CSV, CLI options, generator flag.
+REM    9. Run edge cases: missing CSV arg, non-existent file.
+REM   10. Print PASS/FAIL summary and exit non-zero if any test failed.
 REM
 REM  Exit codes:  0 = all tests passed, 1 = one or more tests failed.
 REM ============================================================================
@@ -192,6 +193,31 @@ set /a PASS+=1
 echo.
 
 REM ----------------------------------------------------------------------------
+REM  Step 7: Build and run WorkloadGenerator unit tests
+REM ----------------------------------------------------------------------------
+echo --- Step 7: WorkloadGenerator unit tests ---
+g++ -std=c++14 -Wall -Wextra -Iinclude -Isrc src\workload.cpp tests\test_workload.cpp -o test_workload
+if %ERRORLEVEL% NEQ 0 goto :workload_compile_fail
+
+test_workload.exe
+if %ERRORLEVEL% EQU 0 goto :workload_pass
+
+echo [FAIL] test_workload returned a non-zero exit code.
+set /a FAIL+=1
+goto :workload_done
+
+:workload_compile_fail
+echo [FAIL] test_workload.cpp failed to compile.
+set /a FAIL+=1
+goto :workload_done
+
+:workload_pass
+set /a PASS+=1
+
+:workload_done
+echo.
+
+REM ----------------------------------------------------------------------------
 REM  Test 1: Smoke test with sample CSV (expect exit 0)
 REM ----------------------------------------------------------------------------
 echo --- Test 1: Smoke test (sample_jobs.csv) ---
@@ -208,9 +234,17 @@ call :check_result 0 %ERRORLEVEL% "Smoke test: sim runs with max_ticks=50"
 echo.
 
 REM ----------------------------------------------------------------------------
-REM  Test 3: No arguments -- should exit non-zero (usage error)
+REM  Test 3: Generator CLI flag (expect exit 0)
 REM ----------------------------------------------------------------------------
-echo --- Test 3: No arguments (expect non-zero) ---
+echo --- Test 3: Generator CLI flag ---
+sim.exe --generate data\workload_light.cfg data\generated_light.csv > nul 2>&1
+call :check_result 0 %ERRORLEVEL% "Generator CLI: sim --generate runs on light config"
+echo.
+
+REM ----------------------------------------------------------------------------
+REM  Test 4: No arguments -- should exit non-zero (usage error)
+REM ----------------------------------------------------------------------------
+echo --- Test 4: No arguments (expect non-zero) ---
 sim.exe > nul 2>&1
 set RC3=%ERRORLEVEL%
 if %RC3% NEQ 0 (
@@ -222,9 +256,9 @@ if %RC3% NEQ 0 (
 echo.
 
 REM ----------------------------------------------------------------------------
-REM  Test 4: Non-existent CSV -- should exit non-zero
+REM  Test 5: Non-existent CSV -- should exit non-zero
 REM ----------------------------------------------------------------------------
-echo --- Test 4: Non-existent file (expect non-zero) ---
+echo --- Test 5: Non-existent file (expect non-zero) ---
 sim.exe data\does_not_exist.csv > nul 2>&1
 set RC4=%ERRORLEVEL%
 if %RC4% NEQ 0 (

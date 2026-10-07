@@ -13,6 +13,7 @@
 #include "csv_loader.hpp"
 #include "scheduler.hpp"
 #include "simulator.hpp"
+#include "workload.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -154,8 +155,52 @@ static void print_summary(const mlsched::Simulator& sim) {
 //  main
 // ============================================================================
 int main(int argc, char* argv[]) {
+    if (argc >= 3 && (std::string(argv[1]) == "--generate" || std::string(argv[1]) == "-g")) {
+        try {
+            const std::string cfg_path = argv[2];
+            auto cfg = mlsched::WorkloadConfig::load_from_file(cfg_path);
+            mlsched::WorkloadGenerator gen(cfg);
+            auto jobs = gen.generate();
+
+            auto summary = mlsched::WorkloadGenerator::summarize(jobs, cfg.horizon);
+
+            std::cout << "\n=== Workload Generation Summary ===\n"
+                      << "Config file  : " << cfg_path << "\n"
+                      << "Horizon      : " << summary.horizon << " ticks\n"
+                      << "Total jobs   : " << summary.total_jobs << "\n"
+                      << "  - Inference    : " << summary.infer_jobs
+                      << " jobs (demand: " << summary.infer_demand << " ticks)\n"
+                      << "  - Training     : " << summary.train_jobs
+                      << " jobs (demand: " << summary.train_demand << " ticks)\n"
+                      << "  - Preprocessing: " << summary.preproc_jobs
+                      << " jobs (demand: " << summary.preproc_demand << " ticks)\n"
+                      << "Total demand : " << summary.total_demand << " ticks\n"
+                      << "Capacity     : " << summary.horizon << " ticks\n"
+                      << "Demand ratio : " << std::fixed << std::setprecision(1)
+                      << (summary.demand_ratio * 100.0) << "% ("
+                      << (summary.demand_ratio > 1.0 ? "OVERLOADED" : (summary.demand_ratio < 0.6 ? "LIGHT" : "MEDIUM"))
+                      << ")\n";
+
+            if (argc >= 4) {
+                const std::string out_csv = argv[3];
+                if (mlsched::save_jobs_to_csv(out_csv, jobs)) {
+                    std::cout << "Saved " << jobs.size() << " jobs to " << out_csv << "\n";
+                } else {
+                    std::cerr << "Failed to write CSV to " << out_csv << "\n";
+                    return EXIT_FAILURE;
+                }
+            }
+            return EXIT_SUCCESS;
+        } catch (const std::exception& e) {
+            std::cerr << "Generation error: " << e.what() << "\n";
+            return EXIT_FAILURE;
+        }
+    }
+
     if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <jobs.csv> [max_ticks]\n";
+        std::cerr << "Usage:\n"
+                  << "  " << argv[0] << " <jobs.csv> [max_ticks]\n"
+                  << "  " << argv[0] << " --generate <config.cfg> [output.csv]\n";
         return EXIT_FAILURE;
     }
 

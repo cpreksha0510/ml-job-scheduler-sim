@@ -16,7 +16,7 @@ setlocal EnableDelayedExpansion
 echo [build] Collecting source files...
 
 REM -- Always-present sources ---------------------------------------------------
-set "SRCS=src\simulator.cpp src\metrics.cpp src\main.cpp"
+set "SRCS=src\simulator.cpp src\metrics.cpp src\workload.cpp src\main.cpp"
 
 REM -- Optional policy sources (directory may be empty at this stage) -----------
 REM    We enumerate them explicitly so the glob never reaches g++ unexpanded.
