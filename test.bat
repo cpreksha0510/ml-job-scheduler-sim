@@ -6,10 +6,11 @@ REM  Usage:
 REM    test.bat
 REM
 REM  Strategy:
-REM    1. Build via build.bat (fails fast if compilation breaks).
-REM    2. Run smoke test: sim.exe against data/sample_jobs.csv.
-REM    3. Run edge cases: missing CSV arg, non-existent file.
-REM    4. Print PASS/FAIL summary and exit non-zero if any test failed.
+REM    1. Build sim.exe via build.bat (fails fast if compilation breaks).
+REM    2. Build and run tests\test_fcfs  (FCFS unit tests, plain asserts).
+REM    3. Run smoke test: sim.exe against data/sample_jobs.csv.
+REM    4. Run edge cases: missing CSV arg, non-existent file.
+REM    5. Print PASS/FAIL summary and exit non-zero if any test failed.
 REM
 REM  Exit codes:  0 = all tests passed, 1 = one or more tests failed.
 REM ============================================================================
@@ -49,9 +50,9 @@ echo ============================================================
 echo.
 
 REM ----------------------------------------------------------------------------
-REM  Step 1: Build
+REM  Step 1: Build sim.exe
 REM ----------------------------------------------------------------------------
-echo --- Step 1: Build ---
+echo --- Step 1: Build sim.exe ---
 call build.bat
 set BUILD_RC=%ERRORLEVEL%
 if %BUILD_RC% NEQ 0 (
@@ -59,6 +60,33 @@ if %BUILD_RC% NEQ 0 (
     echo [FATAL] Build failed. Aborting tests.
     exit /b 1
 )
+echo.
+
+REM ----------------------------------------------------------------------------
+REM  Step 2: Build and run FCFS unit tests
+REM    Compiles its own binary (test_fcfs.exe) -- separate from sim.exe.
+REM    The binary prints [PASS]/[FAIL] per assertion and exits 0 on success.
+REM ----------------------------------------------------------------------------
+echo --- Step 2: FCFS unit tests ---
+g++ -std=c++14 -Wall -Wextra -Iinclude -Isrc src\simulator.cpp src\policies\fcfs.cpp tests\test_fcfs.cpp -o test_fcfs
+if %ERRORLEVEL% NEQ 0 goto :fcfs_compile_fail
+
+test_fcfs.exe
+if %ERRORLEVEL% EQU 0 goto :fcfs_pass
+
+echo [FAIL] test_fcfs returned a non-zero exit code.
+set /a FAIL+=1
+goto :fcfs_done
+
+:fcfs_compile_fail
+echo [FAIL] test_fcfs.cpp failed to compile.
+set /a FAIL+=1
+goto :fcfs_done
+
+:fcfs_pass
+set /a PASS+=1
+
+:fcfs_done
 echo.
 
 REM ----------------------------------------------------------------------------

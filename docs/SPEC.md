@@ -49,5 +49,5 @@ simulator that models such workloads and compares scheduling policies.
 - Compare FCFS and SJF averages against textbook formulas.
 
 ## Constraints
-- C++17, STL only, CMake build.
+- C++14, STL only, no CMake. Build with `build.bat` (g++ -std=c++14).
 - Same seed must always produce the same workload and results.

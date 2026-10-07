@@ -1,4 +1,4 @@
-- Language: C++17, no external deps except the STL. Build with CMake.
+- Language: C++14, no external deps except the STL. Build with `build.bat` (g++ -std=c++14).
 - Read docs/SPEC.md before any task. Do not change the Job struct or the
   Scheduler interface without asking me.
 - Each policy lives in its own file under src/policies/ and implements
