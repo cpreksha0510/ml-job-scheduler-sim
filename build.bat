@@ -5,7 +5,7 @@ REM
 REM  Usage:
 REM    build.bat
 REM
-REM  Produces:  sim.exe  in the project root.
+REM  Produces:  sim.exe and experiments.exe in the project root.
 REM
 REM  Requirements: g++ on PATH, C++14, STL only.
 REM  Exit codes:   0 = success, non-zero = compilation error.
@@ -32,19 +32,30 @@ if not "!POLICY_SRCS!"=="" (
     echo [build] No policy .cpp files found -- building core only.
 )
 
-REM -- Compile ------------------------------------------------------------------
-echo [build] Running g++...
+REM -- Compile sim.exe ----------------------------------------------------------
+echo [build] Compiling sim.exe...
 echo         g++ -std=c++14 -Wall -Wextra -Iinclude %SRCS% -o sim
 
 g++ -std=c++14 -Wall -Wextra -Iinclude %SRCS% -o sim
 
-set BUILD_EXIT=%ERRORLEVEL%
-
-if %BUILD_EXIT% NEQ 0 (
+if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo [build] FAILED  (g++ exited with code %BUILD_EXIT%)
-    exit /b %BUILD_EXIT%
+    echo [build] FAILED compiling sim.exe
+    exit /b 1
 )
 
-echo [build] SUCCESS  --  sim.exe is ready.
+REM -- Compile experiments.exe --------------------------------------------------
+echo [build] Compiling experiments.exe...
+set "EXP_SRCS=src\simulator.cpp src\metrics.cpp src\workload.cpp src\experiment.cpp!POLICY_SRCS!"
+echo         g++ -std=c++14 -Wall -Wextra -Iinclude !EXP_SRCS! -o experiments
+
+g++ -std=c++14 -Wall -Wextra -Iinclude !EXP_SRCS! -o experiments
+
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo [build] FAILED compiling experiments.exe
+    exit /b 1
+)
+
+echo [build] SUCCESS  --  sim.exe and experiments.exe are ready.
 exit /b 0
