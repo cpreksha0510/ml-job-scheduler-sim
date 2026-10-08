@@ -51,11 +51,18 @@ echo         g++ -std=c++14 -Wall -Wextra -Iinclude !EXP_SRCS! -o experiments
 
 g++ -std=c++14 -Wall -Wextra -Iinclude !EXP_SRCS! -o experiments
 
+REM -- Compile benchmark.exe (-O2) --------------------------------------------
+echo [build] Compiling benchmark.exe (-O2)...
+set "BENCH_SRCS=src\simulator.cpp src\metrics.cpp src\workload.cpp src\benchmark.cpp!POLICY_SRCS!"
+echo         g++ -std=c++14 -O2 -Wall -Wextra -Iinclude -Isrc !BENCH_SRCS! -o benchmark
+
+g++ -std=c++14 -O2 -Wall -Wextra -Iinclude -Isrc !BENCH_SRCS! -o benchmark
+
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo [build] FAILED compiling experiments.exe
+    echo [build] FAILED compiling benchmark.exe
     exit /b 1
 )
 
-echo [build] SUCCESS  --  sim.exe and experiments.exe are ready.
+echo [build] SUCCESS  --  sim.exe, experiments.exe, and benchmark.exe are ready.
 exit /b 0
