@@ -13,9 +13,11 @@ REM    4. Build and run tests\test_srtf      (SRTF unit tests, plain asserts).
 REM    5. Build and run tests\test_rr        (Round Robin unit tests, plain asserts).
 REM    6. Build and run tests\test_metrics   (Metrics module unit tests).
 REM    7. Build and run tests\test_workload  (WorkloadGenerator unit tests).
-REM    8. Run smoke tests: sim.exe on CSV, CLI options, generator flag.
-REM    9. Run edge cases: missing CSV arg, non-existent file.
-REM   10. Print PASS/FAIL summary and exit non-zero if any test failed.
+REM    8. Build and run tests\test_mlfq      (MLFQ unit tests, plain asserts).
+REM    9. Build and run tests\test_edf       (EDF unit tests, plain asserts).
+REM   10. Run smoke tests: sim.exe on CSV, CLI options, generator flag.
+REM   11. Run edge cases: missing CSV arg, non-existent file.
+REM   12. Print PASS/FAIL summary and exit non-zero if any test failed.
 REM
 REM  Exit codes:  0 = all tests passed, 1 = one or more tests failed.
 REM ============================================================================
@@ -215,6 +217,56 @@ goto :workload_done
 set /a PASS+=1
 
 :workload_done
+echo.
+
+REM ----------------------------------------------------------------------------
+REM  Step 8: Build and run MLFQ unit tests
+REM ----------------------------------------------------------------------------
+echo --- Step 8: MLFQ unit tests ---
+g++ -std=c++14 -Wall -Wextra -Iinclude -Isrc src\simulator.cpp src\metrics.cpp src\policies\mlfq.cpp tests\test_mlfq.cpp -o test_mlfq
+if %ERRORLEVEL% NEQ 0 goto :mlfq_compile_fail
+
+test_mlfq.exe
+if %ERRORLEVEL% EQU 0 goto :mlfq_pass
+
+echo [FAIL] test_mlfq returned a non-zero exit code.
+set /a FAIL+=1
+goto :mlfq_done
+
+:mlfq_compile_fail
+echo [FAIL] test_mlfq.cpp failed to compile.
+set /a FAIL+=1
+goto :mlfq_done
+
+:mlfq_pass
+set /a PASS+=1
+
+:mlfq_done
+echo.
+
+REM ----------------------------------------------------------------------------
+REM  Step 9: Build and run EDF unit tests
+REM ----------------------------------------------------------------------------
+echo --- Step 9: EDF unit tests ---
+g++ -std=c++14 -Wall -Wextra -Iinclude -Isrc src\simulator.cpp src\metrics.cpp src\policies\edf.cpp tests\test_edf.cpp -o test_edf
+if %ERRORLEVEL% NEQ 0 goto :edf_compile_fail
+
+test_edf.exe
+if %ERRORLEVEL% EQU 0 goto :edf_pass
+
+echo [FAIL] test_edf returned a non-zero exit code.
+set /a FAIL+=1
+goto :edf_done
+
+:edf_compile_fail
+echo [FAIL] test_edf.cpp failed to compile.
+set /a FAIL+=1
+goto :edf_done
+
+:edf_pass
+set /a PASS+=1
+
+:edf_done
 echo.
 
 REM ----------------------------------------------------------------------------
