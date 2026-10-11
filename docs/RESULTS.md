@@ -31,30 +31,42 @@ $$\text{Reduction} = \frac{\text{Miss Rate}_{\text{RR}} - \text{Miss Rate}_{\tex
 
 ## 3. Where Hybrid Does Not Win
 
-Hybrid is optimized to protect inference deadlines while reserving capacity for training progress. Consequently, other policies outperform Hybrid on several metrics where different tradeoffs are favored:
+Hybrid is optimized to protect inference deadlines while reserving capacity for training progress. Consequently, other policies outperform Hybrid on several metrics where different tradeoffs are favored. Seed-paired comparisons across all 10 evaluation seeds (detailed in [docs/PAIRED.md](PAIRED.md)) quantify the statistical robustness of each claimed tradeoff:
 
 ### Light Load
-- **Inference Deadline-Miss Rate:** Pure **EDF** achieves $0.0178 \pm 0.0160$ vs. Hybrid's $0.0225 \pm 0.0249$. Because Hybrid guarantees 1 out of every 10 ticks ($K=10$) to background training, an inference job with an imminent deadline can occasionally miss when displaced by a reserved tick.
-- **Inference Waiting Time:** **SRTF** ($0.1162$), **EDF** ($0.1504$), and **SJF** ($0.1517$) achieve lower inference waiting time than Hybrid ($0.2079$).
-- **Response Time:** **MLFQ** achieves the lowest overall average response time ($0.3804$ vs. Hybrid's $1.2678$) and preprocessing response time ($0.8872$ vs. Hybrid's $3.5786$) because all arriving jobs enter the top priority queue upon admission.
-- **Training Waiting Time:** **FCFS** ($20.94$) and **SJF** ($28.31$) achieve lower average training waiting time than Hybrid ($44.64$).
+- **Inference Deadline-Miss Rate:** Pure **EDF** achieves $0.0178 \pm 0.0160$ vs. Hybrid's $0.0225 \pm 0.0249$ (Hybrid wins 1/10 seeds, ties 6/10 seeds, EDF wins 3/10 seeds). Because Hybrid guarantees 1 out of every 10 ticks ($K=10$) to background training, an inference job with an imminent deadline can occasionally miss when displaced by a reserved tick.
+- **Inference Waiting Time:**
+  - vs. **SRTF** ($0.1162$ vs. Hybrid $0.2079$): Hybrid wins 5 of 10 seeds and ties 1 seed (**not distinguishable from noise**; Hybrid wins $\ge 4/10$ seeds).
+  - vs. **EDF** ($0.1504$ vs. Hybrid $0.2079$): Hybrid wins 1 of 10 seeds, ties 1 seed (EDF wins 8 of 10 seeds).
+  - vs. **SJF** ($3.1601$ vs. Hybrid $0.2079$): Hybrid wins 10 of 10 seeds (**not distinguishable from noise / claim invalid**; non-preemptive SJF delays inference behind long training bursts).
+- **Response Time:** **MLFQ** achieves lower overall average response time ($0.3804$ vs. Hybrid's $1.2678$, Hybrid wins 0/10 seeds) and preprocessing response time ($0.8872$ vs. Hybrid's $3.5786$, Hybrid wins 0/10 seeds) because all arriving jobs enter the top priority queue upon admission.
+- **Training Waiting Time:** **FCFS** ($20.94$, Hybrid wins 0/10 seeds, ties 1/10) and **SJF** ($28.31$, Hybrid wins 0/10 seeds, ties 1/10) achieve lower average training waiting time than Hybrid ($44.64$).
 
 ### Medium Load
-- **Inference Deadline-Miss Rate & Waiting Time:** **SRTF** achieves slightly lower inference deadline miss rate ($0.1091$ vs. Hybrid's $0.1141$) and inference waiting time ($0.6178$ vs. Hybrid's $0.7234$) by greedily prioritizing remaining burst length over arrival order.
-- **Overall Waiting & Turnaround Time:** **SRTF** (avg wait $13.25$, turnaround $19.14$) and **EDF** (avg wait $17.50$, turnaround $23.39$) outperform Hybrid (avg wait $21.78$, turnaround $27.67$).
-- **Training Degradation:** Because inference jobs in Tier 0 take precedence, training jobs experience higher waiting times under Hybrid ($229.66$) than under **FCFS** ($58.03$), **SJF** ($127.18$), **SRTF** ($173.30$), and **EDF** ($182.57$).
-- **Preprocessing Deadlines:** Preprocessing deadline miss rate is higher under Hybrid ($0.8297$) than under **SRTF** ($0.4792$), **EDF** ($0.5266$), and **SJF** ($0.6665$).
+- **Inference Deadline-Miss Rate & Waiting Time:** **SRTF** achieves slightly lower inference deadline miss rate ($0.1091$ vs. Hybrid's $0.1141$, Hybrid wins 3/10 seeds, ties 1/10 seeds) and inference waiting time ($0.6178$ vs. Hybrid's $0.7234$, Hybrid wins 2/10 seeds, ties 1/10 seeds) by greedily prioritizing remaining burst length over arrival order.
+- **Overall Waiting & Turnaround Time:** **SRTF** (avg wait $13.25$, turnaround $19.14$, Hybrid wins 0/10 seeds) and **EDF** (avg wait $17.50$, turnaround $23.39$, Hybrid wins 1/10 seeds) outperform Hybrid (avg wait $21.78$, turnaround $27.67$).
+- **Training Degradation:** Because inference jobs in Tier 0 take precedence, training jobs experience higher waiting times under Hybrid ($229.66$) than under **FCFS** ($58.03$, Hybrid wins 0/10 seeds), **SJF** ($127.18$, Hybrid wins 0/10 seeds), **SRTF** ($173.30$, Hybrid wins 0/10 seeds), and **EDF** ($182.57$, Hybrid wins 0/10 seeds, ties 1/10).
+- **Preprocessing Deadlines:** Preprocessing deadline miss rate is higher under Hybrid ($0.8297$) than under **SRTF** ($0.4792$, Hybrid wins 0/10 seeds), **EDF** ($0.5266$, Hybrid wins 0/10 seeds), and **SJF** ($0.6665$, Hybrid wins 0/10 seeds, ties 1/10).
 
 ### Overloaded Load
-- **Inference Deadline-Miss Rate:** **SRTF** achieves $0.3505 \pm 0.0768$ miss rate compared to Hybrid's $0.4598 \pm 0.0861$.
-- **Overall Average Waiting Time:** **SRTF** ($82.08$) and **SJF** ($87.28$) achieve substantially lower overall waiting times than Hybrid ($144.17$).
-- **Training Waiting Time:** **FCFS** ($410.94$), **SJF** ($928.86$), **SRTF** ($963.51$), and **EDF** ($986.66$) all achieve lower training waiting times than Hybrid ($1145.71$).
-- **Preprocessing Starvation:** Under severe overload, preprocessing jobs that demote to Tier 2 experience high wait times ($537.46$ under Hybrid vs. $159.90$ under EDF and $261.13$ under SRTF) and a $1.0000$ deadline miss rate.
-- **Maximum Waiting Time (Starvation):** **FCFS** bounds max wait time across all jobs to $856.10$ ticks, whereas Hybrid reaches $1450.50$ ticks for long training jobs delayed by inference bursts.
+- **Inference Deadline-Miss Rate:** **SRTF** achieves $0.3505 \pm 0.0768$ miss rate compared to Hybrid's $0.4598 \pm 0.0861$ (Hybrid wins 0/10 seeds, SRTF wins 10/10 seeds).
+- **Overall Average Waiting Time:** **SRTF** ($82.08$, Hybrid wins 0/10 seeds) and **SJF** ($87.28$, Hybrid wins 0/10 seeds) achieve substantially lower overall waiting times than Hybrid ($144.17$).
+- **Training Waiting Time:** **FCFS** ($410.94$, Hybrid wins 0/10 seeds), **SJF** ($928.86$, Hybrid wins 0/10 seeds), **SRTF** ($963.51$, Hybrid wins 0/10 seeds), and **EDF** ($986.66$, Hybrid wins 0/10 seeds) all achieve lower training waiting times than Hybrid ($1145.71$).
+- **Preprocessing Starvation:** Under severe overload, preprocessing jobs that demote to Tier 2 experience high wait times ($537.46$ under Hybrid vs. $159.90$ under EDF [Hybrid wins 0/10 seeds] and $261.13$ under SRTF [Hybrid wins 0/10 seeds]) and a $1.0000$ deadline miss rate.
+- **Maximum Waiting Time (Starvation):** **FCFS** bounds max wait time across all jobs to $856.10$ ticks (Hybrid wins 0/10 seeds), whereas Hybrid reaches $1450.50$ ticks for long training jobs delayed by inference bursts.
 
 ---
 
-## 4. Figures
+## 4. Data-Backed Analysis: Why EDF Misses ~26% of Inference Deadlines at Medium Load
+
+At medium load, total workload demand is approximately 80.3% of simulation capacity (e.g. seed 1 generates 57,573 demand ticks across a 67,114-tick horizon), yet pure EDF suffers an average inference deadline-miss rate of **$0.2575 \pm 0.1702$ (25.8%)** alongside a **$0.5135 \pm 0.2079$ (51.4%)** preprocessing miss rate. Simulator outputs and workload configuration reveal two compounding mechanisms:
+
+1. **Tight Inference Slack vs. Preprocessing Burst Arrival:** In `data/workload_medium.cfg`, inference requests have a tight slack factor of $1.5$ ($\text{deadline} = \text{arrival} + \lceil\text{burst} \times 1.5\rceil$), allowing only 1 to 2 ticks of queuing delay for burst 1–3 requests. Preprocessing jobs arrive in simultaneous batches of 3 (`preproc_batch_size = 3`) with bursts of 8–12 ticks (mean 10 ticks, totaling ~30 contiguous ticks of demand per batch) and slack factor $3.0$ ($\text{deadline} = \text{arrival} + 30$).
+2. **EDF Domino Collapses from Expired Deadlines:** Pure EDF places all deadline-bearing jobs into a single min-heap and does **not drop overdue jobs**. When a batch of preprocessing jobs is scheduled, their earlier absolute deadlines grant them execution priority. Once transient queuing causes a preprocessing job to miss its deadline, its expired deadline remains small, creating head-of-line blocking for subsequent arrivals. For example, in medium load seed 1 at $t=591$, preprocessing batch jobs 109, 110, and 111 arrive with deadlines 618–624. They execute back-to-back until $t=652$, finishing 13, 22, and 28 ticks late. During this entire 61-tick window, their expired deadlines strictly precede those of newly arriving inference jobs (e.g., Job 115 arrives at $t=617$ with deadline 619, Job 116 at $t=633$ with deadline 638, Jobs 117–121 arriving $t=638\dots654$). All seven inference jobs are queued behind the overdue preprocessing work and miss their deadlines by 12 to 22 ticks. Even on smaller Poisson clusters (e.g. $t=114\dots120$, where Job 17 with burst 4 delays Job 18 with burst 3 to finish at $t=121 > 120$), slack 1.5 provides zero queue buffer. In contrast, Hybrid isolates inference into Tier 0, ensuring that preprocessing never preempts or delays inference requests.
+
+---
+
+## 5. Figures
 
 The generated figures are available in `docs/figures/`:
 1. `fig1_inference_deadline_miss_rate.png`: Inference deadline-miss rate vs. workload load.

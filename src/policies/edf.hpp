@@ -2,7 +2,7 @@
 // ============================================================================
 //  edf.hpp  –  Earliest Deadline First (preemptive) scheduling policy
 //
-//  Preemptive. Min-heap on absolute deadline, ties broken by lowest job id.
+//  Preemptive. Persistent set on absolute deadline, ties broken by lowest job id.
 //  Jobs with no deadline (deadline == UNSET / -1) are treated as infinitely
 //  far away (lowest priority).
 //  Jobs that have already missed their deadline are NOT dropped; they keep
@@ -15,7 +15,7 @@
 // ============================================================================
 #include "scheduler.hpp"
 
-#include <queue>
+#include <set>
 #include <vector>
 
 namespace mlsched {
@@ -27,32 +27,33 @@ public:
 
     Job* pick_next(std::vector<Job*>& ready, int64_t time) override;
     void on_tick(int64_t time) override;
+    void on_job_arrival(Job& job, int64_t time) override;
+    void on_job_complete(Job& job, int64_t time) override;
 
 private:
     struct Compare {
         bool operator()(const Job* a, const Job* b) const noexcept {
+            if (a == b) return false;
             bool a_has = a->has_deadline();
             bool b_has = b->has_deadline();
 
             if (!a_has && !b_has) {
-                // Neither has deadline: tie-break by lowest job id
-                return a->id > b->id;
+                return a->id < b->id;
             }
             if (!a_has && b_has) {
-                // a has no deadline (infinitely far), so b comes first
-                return true;
-            }
-            if (a_has && !b_has) {
-                // a has deadline, so a comes first
                 return false;
             }
-            // Both have deadlines
-            if (a->deadline != b->deadline) {
-                return a->deadline > b->deadline; // min-heap: smaller deadline first
+            if (a_has && !b_has) {
+                return true;
             }
-            return a->id > b->id; // tie-break: smaller id first
+            if (a->deadline != b->deadline) {
+                return a->deadline < b->deadline; // earlier deadline comes first
+            }
+            return a->id < b->id;                 // tie-break: smaller id first
         }
     };
+
+    std::set<Job*, Compare> ready_set_;
 };
 
 } // namespace mlsched

@@ -6,21 +6,26 @@
 
 namespace mlsched {
 
-Job* Edf::pick_next(std::vector<Job*>& ready, int64_t /*time*/) {
-    if (ready.empty()) return nullptr;
+void Edf::on_job_arrival(Job& job, int64_t /*time*/) {
+    ready_set_.insert(&job);
+}
 
-    // Build min-heap over all available ready jobs.
-    // Jobs that have already missed their deadline are NOT dropped or skipped;
-    // they remain in the ready queue and keep running in deadline order.
-    std::priority_queue<Job*, std::vector<Job*>, Compare> pq;
-    for (Job* j : ready) {
-        if (j != nullptr) {
-            pq.push(j);
+void Edf::on_job_complete(Job& job, int64_t /*time*/) {
+    ready_set_.erase(&job);
+}
+
+Job* Edf::pick_next(std::vector<Job*>& ready, int64_t /*time*/) {
+    if (ready_set_.empty() && !ready.empty()) {
+        // Fallback if ready vector has jobs not tracked by arrival hooks (e.g. direct test calls)
+        for (Job* j : ready) {
+            if (j != nullptr && j->finish_time == UNSET && !j->is_complete()) {
+                ready_set_.insert(j);
+            }
         }
     }
 
-    if (pq.empty()) return nullptr;
-    return pq.top();
+    if (ready_set_.empty()) return nullptr;
+    return *ready_set_.begin();
 }
 
 void Edf::on_tick(int64_t /*time*/) {

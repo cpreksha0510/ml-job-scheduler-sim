@@ -3,9 +3,8 @@
 //  fcfs.hpp  –  First-Come First-Served scheduling policy
 //
 //  Non-preemptive. Picks the job with the smallest arrival time among those
-//  currently in the ready queue.  O(n) scan (acceptable per SPEC complexity
-//  targets; a FIFO queue would be O(1) but the Simulator manages the ready
-//  vector, so we scan here to stay interface-clean).
+//  currently in the ready queue. Uses an internal FIFO queue populated via
+//  on_job_arrival for O(1) dispatch.
 //
 //  Rules (AGENT_RULES.md):
 //    - Inherits from mlsched::Scheduler only.
@@ -14,12 +13,13 @@
 // ============================================================================
 #include "scheduler.hpp"
 
+#include <deque>
+#include <vector>
+
 namespace mlsched {
 
 class Fcfs final : public Scheduler {
 public:
-    // ── Scheduler interface ───────────────────────────────────────────────────
-
     const char* name() const noexcept override { return "FCFS"; }
 
     /// Non-preemptive: once a job is running, it keeps the CPU until done.
@@ -30,6 +30,17 @@ public:
 
     /// No per-tick internal state needed for plain FCFS.
     void on_tick(int64_t time) override;
+
+    /// Enqueue newly admitted jobs in FIFO arrival order.
+    void on_job_arrival(Job& job, int64_t time) override;
+
+    /// Clean up current job pointer upon completion.
+    void on_job_complete(Job& job, int64_t time) override;
+
+private:
+    Job* current_ = nullptr;
+    std::deque<Job*> queue_;
+    std::vector<Job*> new_arrivals_;
 };
 
 } // namespace mlsched

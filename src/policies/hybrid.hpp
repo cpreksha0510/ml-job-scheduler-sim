@@ -3,7 +3,7 @@
 //  hybrid.hpp  –  ML-Workload-Aware Hybrid Scheduling Policy
 //
 //  Three-tier hybrid scheduler:
-//    - Tier 0: Inference jobs (EDF, preemptive, no quantum, never demoted).
+//    - Tier 0: Inference jobs (EDF, preemptive, persistent set, never demoted).
 //    - Tier 1: Preprocessing jobs (FIFO, quantum = tier1_quantum, demotes to tier 2).
 //    - Tier 2: Training jobs (FIFO, quantum = tier2_quantum, round-robin in tier 2).
 //
@@ -22,7 +22,7 @@
 
 #include <cstdint>
 #include <deque>
-#include <unordered_map>
+#include <set>
 #include <vector>
 
 namespace mlsched {
@@ -52,17 +52,27 @@ private:
     // Helper to determine if job 'a' has higher Tier 0 priority than 'b'
     static bool tier0_more_urgent(const Job* a, const Job* b) noexcept;
 
+    struct Tier0Compare {
+        bool operator()(const Job* a, const Job* b) const noexcept {
+            return tier0_more_urgent(a, b);
+        }
+    };
+
+    struct Tier2Entry {
+        Job*    job;
+        int64_t enqueue_tick;
+    };
+
     HybridConfig config_;
 
     Job*    current_      = nullptr;
     int     current_tier_ = -1;
     int64_t ticks_used_   = 0;
 
-    std::vector<Job*>       tier0_;      ///< Inference jobs (EDF)
-    std::deque<Job*>        tier1_;      ///< Preprocessing / promoted jobs (FIFO)
-    std::deque<Job*>        tier2_;      ///< Training / demoted jobs (FIFO)
-    std::vector<Job*>       new_arrivals_;
-    std::unordered_map<uint32_t, int64_t> tier2_wait_time_;
+    std::set<Job*, Tier0Compare> tier0_;      ///< Inference jobs (EDF min-heap)
+    std::deque<Job*>             tier1_;      ///< Preprocessing / promoted jobs (FIFO)
+    std::deque<Tier2Entry>       tier2_;      ///< Training / demoted jobs (FIFO + timestamps)
+    std::vector<Job*>            new_arrivals_;
 };
 
 } // namespace mlsched

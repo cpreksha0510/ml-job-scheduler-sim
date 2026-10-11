@@ -95,9 +95,12 @@ int64_t Simulator::run(int64_t max_ticks) {
             bool just_completed = chosen->is_complete();
             if (just_completed) {
                 chosen->finish_time = current_tick_ + 1;
-                // Remove from ready queue.
-                ready_.erase(std::remove(ready_.begin(), ready_.end(), chosen),
-                             ready_.end());
+                // Remove from ready queue via swap-and-pop (O(1) element moves).
+                auto it = std::find(ready_.begin(), ready_.end(), chosen);
+                if (it != ready_.end()) {
+                    *it = ready_.back();
+                    ready_.pop_back();
+                }
                 scheduler_->on_job_complete(*chosen, current_tick_);
                 running_ = nullptr;
             }

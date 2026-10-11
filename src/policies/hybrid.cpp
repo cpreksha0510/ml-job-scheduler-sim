@@ -18,6 +18,7 @@ HybridScheduler::HybridScheduler(const HybridConfig& config)
 }
 
 bool HybridScheduler::tier0_more_urgent(const Job* a, const Job* b) noexcept {
+    if (a == b) return false;
     bool a_has = a->has_deadline();
     bool b_has = b->has_deadline();
 
@@ -41,34 +42,43 @@ void HybridScheduler::on_job_complete(Job& job, int64_t /*time*/) {
         current_tier_ = -1;
         ticks_used_ = 0;
     }
-    tier2_wait_time_.erase(job.id);
 }
 
-void HybridScheduler::on_tick(int64_t /*time*/) {
+void HybridScheduler::on_tick(int64_t time) {
     if (current_ != nullptr) {
         ++ticks_used_;
-        if (current_tier_ == 2) {
-            tier2_wait_time_[current_->id] = 0;
-        }
     }
 
-    // Update wait counters for jobs waiting in tier 2 (ready but not running)
-    for (Job* j : tier2_) {
-        tier2_wait_time_[j->id] += 1;
-    }
-
-    // Check aging promotions: promote starved Tier 2 jobs to tail of Tier 1
+    // ── Proof of Monotonicity for Tier 2 Aging ──────────────────────────────
+    // Claim: The waiting time of jobs in tier2_ is monotonically non-increasing
+    // from head to tail.
+    //
+    // Proof:
+    // 1. All jobs entering tier2_ (initial arrivals, quantum demotions from Tier 1,
+    //    quantum requeues within Tier 2, or preemptions by higher tiers) are appended
+    //    strictly to the back via tier2_.push_back({job, enqueue_tick = time}) at the
+    //    current simulation tick 'time'.
+    // 2. Jobs are dispatched strictly from the front via tier2_.pop_front().
+    // 3. No job is ever inserted into the interior of tier2_ or reordered.
+    // 4. Since simulation time advances monotonically (t_0 <= t_1 <= ... <= t_current),
+    //    for any two indices i < j in tier2_, tier2_[i].enqueue_tick <= tier2_[j].enqueue_tick.
+    // 5. At any evaluation tick 'time', the elapsed waiting duration for index i is:
+    //      wait_time(i) = time - tier2_[i].enqueue_tick + 1.
+    //    Since tier2_[i].enqueue_tick <= tier2_[j].enqueue_tick, it follows directly that:
+    //      wait_time(i) >= wait_time(j) for all i < j.
+    //
+    // Conclusion:
+    // The head of tier2_ (tier2_.front()) always has the maximum waiting time in Tier 2.
+    // If wait_time(head) < aging_threshold, then wait_time(j) < aging_threshold for all j,
+    // so no job in tier2_ qualifies for promotion.
+    // Hence, examining only the queue head is exact and identical in behaviour to scanning
+    // all elements, achieving O(1) amortized aging checks per tick.
+    // ────────────────────────────────────────────────────────────────────────
     if (config_.aging_threshold > 0) {
-        std::deque<Job*> remaining_tier2;
-        for (Job* j : tier2_) {
-            if (tier2_wait_time_[j->id] >= config_.aging_threshold) {
-                tier1_.push_back(j);
-                tier2_wait_time_.erase(j->id);
-            } else {
-                remaining_tier2.push_back(j);
-            }
+        while (!tier2_.empty() && (time - tier2_.front().enqueue_tick + 1 >= config_.aging_threshold)) {
+            tier1_.push_back(tier2_.front().job);
+            tier2_.pop_front();
         }
-        tier2_ = std::move(remaining_tier2);
     }
 }
 
@@ -81,14 +91,13 @@ Job* HybridScheduler::pick_next(std::vector<Job*>& ready, int64_t time) {
         for (Job* j : new_arrivals_) {
             switch (j->job_class) {
                 case JobClass::Inference:
-                    tier0_.push_back(j);
+                    tier0_.insert(j);
                     break;
                 case JobClass::Preprocessing:
                     tier1_.push_back(j);
                     break;
                 case JobClass::Training:
-                    tier2_.push_back(j);
-                    tier2_wait_time_[j->id] = 0;
+                    tier2_.push_back({j, time});
                     break;
                 default:
                     // Unknown job class routes to tier 1
@@ -100,22 +109,20 @@ Job* HybridScheduler::pick_next(std::vector<Job*>& ready, int64_t time) {
     }
 
     // 2. Quantum expiration for running job (if not already completed):
-    if (current_ != nullptr && current_->finish_time != UNSET) {
+    if (current_ != nullptr && (current_->finish_time != UNSET || current_->is_complete())) {
         current_ = nullptr;
         current_tier_ = -1;
         ticks_used_ = 0;
     } else if (current_ != nullptr) {
         if (current_tier_ == 1 && ticks_used_ >= config_.tier1_quantum) {
             // Tier 1 job demoted to tail of Tier 2
-            tier2_.push_back(current_);
-            tier2_wait_time_[current_->id] = 0;
+            tier2_.push_back({current_, time});
             current_ = nullptr;
             current_tier_ = -1;
             ticks_used_ = 0;
         } else if (current_tier_ == 2 && ticks_used_ >= config_.tier2_quantum) {
             // Tier 2 job requeued to tail of Tier 2
-            tier2_.push_back(current_);
-            tier2_wait_time_[current_->id] = 0;
+            tier2_.push_back({current_, time});
             current_ = nullptr;
             current_tier_ = -1;
             ticks_used_ = 0;
@@ -139,7 +146,7 @@ Job* HybridScheduler::pick_next(std::vector<Job*>& ready, int64_t time) {
         if (current_ != nullptr && current_tier_ < 2) {
             // Running job displaced by reserved tick is treated as preempted
             if (current_tier_ == 0) {
-                tier0_.push_back(current_);
+                tier0_.insert(current_);
             } else if (current_tier_ == 1) {
                 tier1_.push_back(current_);
             }
@@ -149,7 +156,7 @@ Job* HybridScheduler::pick_next(std::vector<Job*>& ready, int64_t time) {
         }
 
         if (current_ == nullptr && !tier2_.empty()) {
-            current_ = tier2_.front();
+            current_ = tier2_.front().job;
             tier2_.pop_front();
             current_tier_ = 2;
             ticks_used_ = 0;
@@ -162,8 +169,7 @@ Job* HybridScheduler::pick_next(std::vector<Job*>& ready, int64_t time) {
         if (current_tier_ == 2) {
             // Preempted if Tier 0 or Tier 1 has work
             if (!tier0_.empty() || !tier1_.empty()) {
-                tier2_.push_back(current_);
-                tier2_wait_time_[current_->id] = 0;
+                tier2_.push_back({current_, time});
                 current_ = nullptr;
                 current_tier_ = -1;
                 ticks_used_ = 0;
@@ -178,15 +184,8 @@ Job* HybridScheduler::pick_next(std::vector<Job*>& ready, int64_t time) {
             }
         } else if (current_tier_ == 0) {
             // Preempted if Tier 0 has a job with an earlier deadline
-            bool higher_urgency_found = false;
-            for (Job* j : tier0_) {
-                if (tier0_more_urgent(j, current_)) {
-                    higher_urgency_found = true;
-                    break;
-                }
-            }
-            if (higher_urgency_found) {
-                tier0_.push_back(current_);
+            if (!tier0_.empty() && tier0_more_urgent(*tier0_.begin(), current_)) {
+                tier0_.insert(current_);
                 current_ = nullptr;
                 current_tier_ = -1;
                 ticks_used_ = 0;
@@ -197,42 +196,7 @@ Job* HybridScheduler::pick_next(std::vector<Job*>& ready, int64_t time) {
     // 5. Dispatch next job (Tier 0 > Tier 1 > Tier 2)
     if (current_ == nullptr) {
         if (!tier0_.empty()) {
-            auto best_it = std::min_element(tier0_.begin(), tier0_.end(),
-                [](const Job* a, const Job* b) {
-                    return tier0_more_urgent(a, b);
-                });
-            current_ = *best_it;
-            tier0_.erase(best_it);
-            current_tier_ = 0;
-            ticks_used_ = 0;
-        } else if (!tier1_.empty()) {
-            current_ = tier1_.front();
-            tier1_.pop_front();
-            current_tier_ = 1;
-            ticks_used_ = 0;
-        } else if (!tier2_.empty()) {
-            current_ = tier2_.front();
-            tier2_.pop_front();
-            current_tier_ = 2;
-            ticks_used_ = 0;
-        }
-    }
-
-    // 6. Fallback: if internal queues were empty but ready vector has jobs
-    if (current_ == nullptr && !ready.empty()) {
-        for (Job* j : ready) {
-            if (j != nullptr && j->finish_time == UNSET) {
-                if (j->job_class == JobClass::Inference) {
-                    tier0_.push_back(j);
-                } else if (j->job_class == JobClass::Preprocessing) {
-                    tier1_.push_back(j);
-                } else {
-                    tier2_.push_back(j);
-                }
-            }
-        }
-        if (!tier0_.empty()) {
-            current_ = tier0_.front();
+            current_ = *tier0_.begin();
             tier0_.erase(tier0_.begin());
             current_tier_ = 0;
             ticks_used_ = 0;
@@ -242,7 +206,38 @@ Job* HybridScheduler::pick_next(std::vector<Job*>& ready, int64_t time) {
             current_tier_ = 1;
             ticks_used_ = 0;
         } else if (!tier2_.empty()) {
-            current_ = tier2_.front();
+            current_ = tier2_.front().job;
+            tier2_.pop_front();
+            current_tier_ = 2;
+            ticks_used_ = 0;
+        }
+    }
+
+    // 6. Fallback: if internal queues were empty but ready vector has jobs
+    if (current_ == nullptr && !ready.empty()) {
+        for (Job* j : ready) {
+            if (j != nullptr && j->finish_time == UNSET && !j->is_complete()) {
+                if (j->job_class == JobClass::Inference) {
+                    tier0_.insert(j);
+                } else if (j->job_class == JobClass::Preprocessing) {
+                    tier1_.push_back(j);
+                } else {
+                    tier2_.push_back({j, time});
+                }
+            }
+        }
+        if (!tier0_.empty()) {
+            current_ = *tier0_.begin();
+            tier0_.erase(tier0_.begin());
+            current_tier_ = 0;
+            ticks_used_ = 0;
+        } else if (!tier1_.empty()) {
+            current_ = tier1_.front();
+            tier1_.pop_front();
+            current_tier_ = 1;
+            ticks_used_ = 0;
+        } else if (!tier2_.empty()) {
+            current_ = tier2_.front().job;
             tier2_.pop_front();
             current_tier_ = 2;
             ticks_used_ = 0;

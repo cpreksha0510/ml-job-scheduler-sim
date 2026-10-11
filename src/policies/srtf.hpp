@@ -2,9 +2,10 @@
 // ============================================================================
 //  srtf.hpp  –  Shortest Remaining Time First (preemptive) scheduling policy
 //
-//  Preemptive: On every tick, picks the ready job with the shortest remaining
-//  burst using a min-heap.
+//  Preemptive: Picks the ready job with the shortest remaining burst.
 //  Tie-breaking: lowest job id wins.
+//  Uses a persistent set updated on arrival/completion. The running job is
+//  popped while executing so keys in the set are never mutated in place.
 //
 //  Rules (AGENT_RULES.md):
 //    - Inherits from mlsched::Scheduler only.
@@ -13,7 +14,7 @@
 // ============================================================================
 #include "scheduler.hpp"
 
-#include <queue>
+#include <set>
 #include <vector>
 
 namespace mlsched {
@@ -27,16 +28,22 @@ public:
 
     Job* pick_next(std::vector<Job*>& ready, int64_t time) override;
     void on_tick(int64_t time) override;
+    void on_job_arrival(Job& job, int64_t time) override;
+    void on_job_complete(Job& job, int64_t time) override;
 
 private:
     struct Compare {
         bool operator()(const Job* a, const Job* b) const noexcept {
+            if (a == b) return false;
             if (a->remaining != b->remaining) {
-                return a->remaining > b->remaining; // min-heap: smaller remaining comes first
+                return a->remaining < b->remaining; // smaller remaining comes first
             }
-            return a->id > b->id;                   // tie-break: smaller id comes first
+            return a->id < b->id;                   // tie-break: smaller id comes first
         }
     };
+
+    Job* current_ = nullptr;
+    std::set<Job*, Compare> waiting_set_;
 };
 
 } // namespace mlsched
