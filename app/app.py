@@ -22,58 +22,45 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 import streamlit as st
 
-# Set page configuration
+# Set page configuration with text-only title and no emoji icon
 st.set_page_config(
     page_title="ML Job Scheduler Simulator",
-    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for polished, modern typography and visual aesthetics
+# Custom CSS for light mode presentation
 st.markdown("""
 <style>
-    .main-title {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #1E293B;
-        margin-bottom: 0.2rem;
-    }
-    .main-subtitle {
-        font-size: 1.05rem;
-        color: #64748B;
-        margin-bottom: 1.5rem;
-    }
-    .metric-card {
-        background-color: #F8FAFC;
-        border: 1px solid #E2E8F0;
-        border-radius: 8px;
-        padding: 16px;
-        text-align: center;
-    }
-    .badge-infer {
-        background-color: #DBEAFE;
-        color: #1E40AF;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-weight: 600;
-        font-size: 0.85rem;
-    }
     .badge-train {
         background-color: #F3E8FF;
         color: #6B21A8;
-        padding: 4px 8px;
+        border: 1px solid #D8B4FE;
+        padding: 5px 12px;
         border-radius: 4px;
         font-weight: 600;
-        font-size: 0.85rem;
+        font-size: 0.9rem;
+        display: inline-block;
     }
     .badge-preproc {
         background-color: #FFEDD5;
         color: #9A3412;
-        padding: 4px 8px;
+        border: 1px solid #FDBA74;
+        padding: 5px 12px;
         border-radius: 4px;
         font-weight: 600;
-        font-size: 0.85rem;
+        font-size: 0.9rem;
+        display: inline-block;
+    }
+    .badge-infer {
+        background-color: #DBEAFE;
+        color: #1E40AF;
+        border: 1px solid #93C5FD;
+        padding: 5px 12px;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        display: inline-block;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -85,11 +72,28 @@ DATA_DIR = os.path.join(REPO_ROOT, "data")
 DOCS_DIR = os.path.join(REPO_ROOT, "docs")
 FIGURES_DIR = os.path.join(DOCS_DIR, "figures")
 
+# Consistent 3-class color mapping across the entire application:
+# 1. Training -> Purple (#9467bd)
+# 2. Preprocessing -> Orange (#ff7f0e)
+# 3. Inference -> Blue (#1f77b4)
 CLASS_COLORS = {
+    "TRAIN": "#9467bd",
     "TRAINING": "#9467bd",
-    "INFERENCE": "#1f77b4",
-    "PREPROCESSING": "#ff7f0e"
+    "PREPROC": "#ff7f0e",
+    "PREPROCESSING": "#ff7f0e",
+    "INFER": "#1f77b4",
+    "INFERENCE": "#1f77b4"
 }
+
+def get_class_color(cls_raw: str) -> str:
+    s = str(cls_raw).strip().upper()
+    if "TRAIN" in s:
+        return "#9467bd"
+    if "PRE" in s:
+        return "#ff7f0e"
+    if "INF" in s:
+        return "#1f77b4"
+    return "#64748B"
 
 POLICY_COLORS = {
     "FCFS": "#7f7f7f",
@@ -178,9 +182,9 @@ def generate_workload_file(load: str, seed: int):
     df = pd.read_csv(out_csv)
     return out_csv, temp_workload_dir, df
 
-# ── Sidebar: Inputs & Controls ───────────────────────────────────────────────
+# -- Sidebar: Inputs & Controls -----------------------------------------------
 with st.sidebar:
-    st.markdown("### ⚙️ Workload Configuration")
+    st.markdown("### Workload Configuration")
     load_choice = st.selectbox(
         "Load Level",
         ["light", "medium", "overloaded"],
@@ -215,23 +219,23 @@ with st.sidebar:
 
     wl_df = st.session_state["workload_df"]
     counts = wl_df["class"].str.upper().value_counts()
-    n_infer = counts.get("INFERENCE", 0)
-    n_train = counts.get("TRAINING", 0)
-    n_preproc = counts.get("PREPROCESSING", 0)
+    n_train = counts.get("TRAINING", counts.get("TRAIN", 0))
+    n_preproc = counts.get("PREPROCESSING", counts.get("PREPROC", 0))
+    n_infer = counts.get("INFERENCE", counts.get("INFER", 0))
     n_total = len(wl_df)
 
     st.markdown("#### Workload Job Distribution")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.metric("Total Jobs", n_total)
-        st.markdown(f"<span class='badge-infer'>Inference: {n_infer}</span>", unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"<span class='badge-train'>Training: {n_train}</span>", unsafe_allow_html=True)
-        st.write("")
-        st.markdown(f"<span class='badge-preproc'>Preproc: {n_preproc}</span>", unsafe_allow_html=True)
+    st.write(f"Total Jobs: **{n_total}**")
+    st.markdown(f"""
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px; margin-bottom: 12px; align-items: flex-start;">
+        <span class="badge-train">Training: {n_train}</span>
+        <span class="badge-preproc">Preprocessing: {n_preproc}</span>
+        <span class="badge-infer">Inference: {n_infer}</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.markdown("---")
-    st.markdown("### 🎯 Policy Selection")
+    st.markdown("### Policy Selection")
     policy_choice = st.selectbox(
         "Scheduling Algorithm",
         ["Hybrid", "FCFS", "SJF", "SRTF", "RR", "MLFQ", "EDF"],
@@ -249,7 +253,7 @@ with st.sidebar:
         knobs["reserve_k"] = st.number_input("Reserve Period K (every K ticks)", min_value=0, max_value=100, value=10, step=1)
 
     st.markdown("---")
-    run_btn = st.button("🚀 Run Simulation", type="primary", use_container_width=True)
+    run_btn = st.button("Run Simulation", type="primary", use_container_width=True)
 
 if run_btn:
     with st.spinner(f"Running simulation with {policy_choice}..."):
@@ -263,22 +267,22 @@ if run_btn:
             st.session_state["last_run_timeline"] = res["timeline"]
             st.success(f"Simulation finished successfully for policy '{policy_choice}'.")
 
-# ── Main Header ─────────────────────────────────────────────────────────────
-st.markdown("<div class='main-title'>⚡ ML Job Scheduler Simulator Dashboard</div>", unsafe_allow_html=True)
-st.markdown("<div class='main-subtitle'>Performance evaluation of CPU/GPU scheduling policies on heterogeneous ML workloads</div>", unsafe_allow_html=True)
+# -- Main Header (No hardcoded colors; inherits standard theme text) ----------
+st.title("ML Job Scheduler Simulator Dashboard")
+st.caption("Performance evaluation of CPU/GPU scheduling policies on heterogeneous ML workloads")
 
-# ── Main Tabs ────────────────────────────────────────────────────────────────
+# -- Main Tabs ----------------------------------------------------------------
 tab_metrics, tab_timeline, tab_compare, tab_results = st.tabs([
-    "📊 Metrics",
-    "⏱️ Timeline (Gantt)",
-    "⚔️ Compare Policies",
-    "📑 Published Results"
+    "Metrics",
+    "Timeline (Gantt)",
+    "Compare Policies",
+    "Published Results"
 ])
 
-# ── TAB 1: Metrics ──────────────────────────────────────────────────────────
+# -- TAB 1: Metrics ----------------------------------------------------------
 with tab_metrics:
     if "last_run_results" not in st.session_state or st.session_state["last_run_results"] is None:
-        st.info("👈 Select a policy in the sidebar and click **Run Simulation** to view metrics.")
+        st.info("Select a policy in the sidebar and click Run Simulation to view metrics.")
     else:
         rdf = st.session_state["last_run_results"].iloc[0]
         pol_name = st.session_state["last_run_policy"]
@@ -298,30 +302,21 @@ with tab_metrics:
         with k5:
             st.metric("Starved Jobs", f"{int(rdf['starved_count'])}")
 
-        st.markdown("#### Overall & Per-Class Summary Table")
+        st.markdown("#### Summary Table by Workload Class")
+        # Class order: Training, Preprocessing, Inference, Overall
         table_rows = [
             {
-                "Class": "Overall",
-                "Job Count": int(rdf["total_jobs"]),
-                "Avg Wait (ticks)": f"{rdf['avg_wait']:.2f}",
-                "Avg Turnaround (ticks)": f"{rdf['avg_turnaround']:.2f}",
-                "Avg Response (ticks)": f"{rdf['avg_response']:.2f}",
-                "Deadline Miss Rate": f"{rdf['deadline_miss_rate']*100:.1f}% ({int(rdf['deadline_miss_count'])}/{int(rdf['deadline_count'])})",
-                "Max Wait (ticks)": int(rdf["max_wait"]),
-                "Starved Jobs": int(rdf["starved_count"])
+                "Class": "Training",
+                "Job Count": int(rdf["train_jobs"]),
+                "Avg Wait (ticks)": f"{rdf['train_avg_wait']:.2f}",
+                "Avg Turnaround (ticks)": f"{rdf['train_avg_ta']:.2f}",
+                "Avg Response (ticks)": f"{rdf['train_avg_resp']:.2f}",
+                "Deadline Miss Rate": f"{rdf['train_miss_rate']*100:.1f}%",
+                "Max Wait (ticks)": int(rdf["train_max_wait"]),
+                "Starved Jobs": int(rdf["train_starved"])
             },
             {
-                "Class": "Inference (Tier 0)",
-                "Job Count": int(rdf["infer_jobs"]),
-                "Avg Wait (ticks)": f"{rdf['infer_avg_wait']:.2f}",
-                "Avg Turnaround (ticks)": f"{rdf['infer_avg_ta']:.2f}",
-                "Avg Response (ticks)": f"{rdf['infer_avg_resp']:.2f}",
-                "Deadline Miss Rate": f"{rdf['infer_miss_rate']*100:.1f}%",
-                "Max Wait (ticks)": int(rdf["infer_max_wait"]),
-                "Starved Jobs": int(rdf["infer_starved"])
-            },
-            {
-                "Class": "Preprocessing (Tier 1)",
+                "Class": "Preprocessing",
                 "Job Count": int(rdf["preproc_jobs"]),
                 "Avg Wait (ticks)": f"{rdf['preproc_avg_wait']:.2f}",
                 "Avg Turnaround (ticks)": f"{rdf['preproc_avg_ta']:.2f}",
@@ -331,26 +326,36 @@ with tab_metrics:
                 "Starved Jobs": int(rdf["preproc_starved"])
             },
             {
-                "Class": "Training (Tier 2)",
-                "Job Count": int(rdf["train_jobs"]),
-                "Avg Wait (ticks)": f"{rdf['train_avg_wait']:.2f}",
-                "Avg Turnaround (ticks)": f"{rdf['train_avg_ta']:.2f}",
-                "Avg Response (ticks)": f"{rdf['train_avg_resp']:.2f}",
-                "Deadline Miss Rate": f"{rdf['train_miss_rate']*100:.1f}%",
-                "Max Wait (ticks)": int(rdf["train_max_wait"]),
-                "Starved Jobs": int(rdf["train_starved"])
+                "Class": "Inference",
+                "Job Count": int(rdf["infer_jobs"]),
+                "Avg Wait (ticks)": f"{rdf['infer_avg_wait']:.2f}",
+                "Avg Turnaround (ticks)": f"{rdf['infer_avg_ta']:.2f}",
+                "Avg Response (ticks)": f"{rdf['infer_avg_resp']:.2f}",
+                "Deadline Miss Rate": f"{rdf['infer_miss_rate']*100:.1f}%",
+                "Max Wait (ticks)": int(rdf["infer_max_wait"]),
+                "Starved Jobs": int(rdf["infer_starved"])
+            },
+            {
+                "Class": "Overall",
+                "Job Count": int(rdf["total_jobs"]),
+                "Avg Wait (ticks)": f"{rdf['avg_wait']:.2f}",
+                "Avg Turnaround (ticks)": f"{rdf['avg_turnaround']:.2f}",
+                "Avg Response (ticks)": f"{rdf['avg_response']:.2f}",
+                "Deadline Miss Rate": f"{rdf['deadline_miss_rate']*100:.1f}% ({int(rdf['deadline_miss_count'])}/{int(rdf['deadline_count'])})",
+                "Max Wait (ticks)": int(rdf["max_wait"]),
+                "Starved Jobs": int(rdf["starved_count"])
             }
         ]
         st.dataframe(pd.DataFrame(table_rows), use_container_width=True)
 
         if st.session_state["last_run_per_job"] is not None:
-            with st.expander("🔍 View Per-Job Raw Execution Trace"):
+            with st.expander("View Per-Job Raw Execution Trace"):
                 st.dataframe(st.session_state["last_run_per_job"], use_container_width=True)
 
-# ── TAB 2: Timeline (Gantt Chart) ───────────────────────────────────────────
+# -- TAB 2: Timeline (Gantt Chart) -------------------------------------------
 with tab_timeline:
     if "last_run_timeline" not in st.session_state or st.session_state["last_run_timeline"] is None:
-        st.info("👈 Run a simulation in the sidebar to visualize the execution timeline.")
+        st.info("Run a simulation in the sidebar to visualize the execution timeline.")
     else:
         tdf = st.session_state["last_run_timeline"].copy()
         pol_name = st.session_state["last_run_policy"]
@@ -389,11 +394,14 @@ with tab_timeline:
 
             # Sort job IDs for vertical axis layout
             job_ids = sorted(visible["job_id"].unique())
-            fig, ax = plt.subplots(figsize=(14, max(4, len(job_ids) * 0.28)), dpi=180)
+            fig, ax = plt.subplots(figsize=(14, max(4.5, len(job_ids) * 0.3)), dpi=180)
+
+            # White background styling
+            fig.patch.set_facecolor("white")
+            ax.set_facecolor("white")
 
             for _, row in visible.iterrows():
-                cls_key = str(row["class"]).strip().upper()
-                c = CLASS_COLORS.get(cls_key, "#64748B")
+                c = get_class_color(row["class"])
                 ax.barh(
                     y=row["job_id"],
                     width=row["duration"],
@@ -405,30 +413,45 @@ with tab_timeline:
                 )
 
             ax.set_xlim(w_start, w_end)
-            ax.set_xlabel("Simulation Tick", fontsize=11, fontweight="bold")
-            ax.set_ylabel("Job ID", fontsize=11, fontweight="bold")
-            ax.set_title(f"{pol_name} Execution Timeline (Ticks {w_start} to {w_end})", fontsize=12, fontweight="bold", pad=10)
-            ax.grid(True, linestyle="--", alpha=0.5, axis="x")
+            ax.set_xlabel("Simulation Tick", fontsize=11, fontweight="bold", color="#1E293B")
+            ax.set_ylabel("Job ID", fontsize=11, fontweight="bold", color="#1E293B")
+            ax.set_title(f"{pol_name} Execution Timeline (Ticks {w_start} to {w_end})", fontsize=12, fontweight="bold", pad=12, color="#1E293B")
+            ax.grid(True, linestyle="--", alpha=0.6, color="#E2E8F0", axis="x")
+            ax.tick_params(colors="#1E293B", labelsize=10)
 
+            for spine in ax.spines.values():
+                spine.set_edgecolor("#CBD5E1")
+
+            # Legend: Training, Preprocessing, Inference in that order; positioned below the plot
             legend_elements = [
-                Patch(facecolor=CLASS_COLORS["INFERENCE"], edgecolor="black", label="Inference (Tier 0 / EDF)"),
-                Patch(facecolor=CLASS_COLORS["PREPROCESSING"], edgecolor="black", label="Preprocessing (Tier 1 / FIFO)"),
-                Patch(facecolor=CLASS_COLORS["TRAINING"], edgecolor="black", label="Training (Tier 2 / RR)")
+                Patch(facecolor="#9467bd", edgecolor="black", label="Training"),
+                Patch(facecolor="#ff7f0e", edgecolor="black", label="Preprocessing"),
+                Patch(facecolor="#1f77b4", edgecolor="black", label="Inference")
             ]
-            ax.legend(handles=legend_elements, loc="upper right", framealpha=0.9)
+            ax.legend(
+                handles=legend_elements,
+                loc="upper center",
+                bbox_to_anchor=(0.5, -0.16),
+                ncol=3,
+                frameon=True,
+                facecolor="white",
+                edgecolor="#CBD5E1",
+                fontsize=10
+            )
+
             plt.tight_layout()
             st.pyplot(fig)
             plt.close()
 
-# ── TAB 3: Compare Policies ──────────────────────────────────────────────────
+# -- TAB 3: Compare Policies --------------------------------------------------
 with tab_compare:
-    st.markdown("### ⚔️ Multi-Policy Comparative Benchmark")
+    st.markdown("### Multi-Policy Comparative Benchmark")
     st.write(
-        f"Run all 7 policies on the active workload (`{load_choice.upper()}`, Seed `{seed_choice}`, `{n_total}` jobs) "
+        f"Run all 7 policies on the active workload ({load_choice.upper()}, Seed {seed_choice}, {n_total} jobs) "
         "to evaluate trade-offs in inference deadline-miss rates, throughput, and starvation."
     )
 
-    comp_btn = st.button("🏁 Run All Policies Comparison", type="secondary")
+    comp_btn = st.button("Run All Policies Comparison", type="secondary")
 
     if comp_btn or "compare_results" in st.session_state:
         if comp_btn:
@@ -460,6 +483,9 @@ with tab_compare:
         if cdf is not None and not cdf.empty:
             st.markdown("#### 1. Inference Deadline-Miss Rate Comparison")
             fig, ax = plt.subplots(figsize=(10, 4.5), dpi=180)
+            fig.patch.set_facecolor("white")
+            ax.set_facecolor("white")
+
             bars = ax.bar(
                 cdf["Policy"],
                 cdf["Infer Miss Rate (%)"],
@@ -469,10 +495,14 @@ with tab_compare:
                 width=0.55
             )
 
-            ax.set_ylabel("Inference Miss Rate (%)", fontsize=11, fontweight="bold")
-            ax.set_title(f"Inference Deadline-Miss Rate by Policy ({load_choice.capitalize()} Load, Seed {seed_choice})", fontsize=12, fontweight="bold", pad=12)
+            ax.set_ylabel("Inference Miss Rate (%)", fontsize=11, fontweight="bold", color="#1E293B")
+            ax.set_title(f"Inference Deadline-Miss Rate by Policy ({load_choice.capitalize()} Load, Seed {seed_choice})", fontsize=12, fontweight="bold", pad=12, color="#1E293B")
             ax.set_ylim(0, max(100.0, cdf["Infer Miss Rate (%)"].max() * 1.15))
-            ax.grid(True, linestyle="--", alpha=0.5, axis="y")
+            ax.grid(True, linestyle="--", alpha=0.6, color="#E2E8F0", axis="y")
+            ax.tick_params(colors="#1E293B", labelsize=10)
+
+            for spine in ax.spines.values():
+                spine.set_edgecolor("#CBD5E1")
 
             for bar in bars:
                 height = bar.get_height()
@@ -480,7 +510,7 @@ with tab_compare:
                             xy=(bar.get_x() + bar.get_width() / 2, height),
                             xytext=(0, 3),
                             textcoords="offset points",
-                            ha="center", va="bottom", fontsize=9, fontweight="bold")
+                            ha="center", va="bottom", fontsize=9, fontweight="bold", color="#1E293B")
 
             plt.tight_layout()
             st.pyplot(fig)
@@ -498,18 +528,18 @@ with tab_compare:
             }
             st.dataframe(display_df.style.format(format_dict), use_container_width=True)
 
-# ── TAB 4: Published Results & Figures ──────────────────────────────────────
+# -- TAB 4: Published Results & Figures --------------------------------------
 with tab_results:
-    st.markdown("### 📑 Published Benchmark Results & Figures")
-    st.write("Aggregated experimental findings across 240 simulation runs (8 policies × 3 load levels × 10 random seeds).")
+    st.markdown("### Published Benchmark Results & Figures")
+    st.write("Aggregated experimental findings across 240 simulation runs (8 policies x 3 load levels x 10 random seeds).")
 
     summary_csv_path = os.path.join(DOCS_DIR, "results_summary.csv")
     if os.path.exists(summary_csv_path):
-        with st.expander("📊 View Aggregated Benchmark Dataset (`docs/results_summary.csv`)", expanded=True):
+        with st.expander("View Aggregated Benchmark Dataset (docs/results_summary.csv)", expanded=True):
             s_df = pd.read_csv(summary_csv_path)
             st.dataframe(s_df, use_container_width=True)
 
-    st.markdown("#### Publication Figures (`docs/figures/`)")
+    st.markdown("#### Publication Figures (docs/figures/)")
     figure_specs = [
         ("fig1_inference_deadline_miss_rate.png", "Figure 1: Inference Deadline-Miss Rate", "Evaluates deadline compliance under Light, Medium, and Overloaded scenarios."),
         ("fig2_waiting_time_by_class.png", "Figure 2: Waiting Time by Workload Class", "Shows how inference, training, and preprocessing jobs wait across policies."),
