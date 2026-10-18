@@ -77,6 +77,21 @@ Execute a single simulation on a custom CSV or generate a synthetic trace:
 .\sim.exe data\sample_jobs.csv
 .\sim.exe --generate data\workload_light.cfg data\generated_light.csv
 ```
+Run any policy in one-process CLI mode with custom parameters:
+```powershell
+.\sim.exe --policy hybrid --workload data\sample_jobs.csv --out results\sample_run
+.\sim.exe --policy rr --workload data\benchmark_5job.csv --out results\rr_run --quantum 2
+```
+
+### 7. Run the dashboard
+Launch the interactive Streamlit web dashboard:
+```powershell
+pip install streamlit pandas
+python -m streamlit run app/app.py
+```
+
+![Dashboard Screenshot](docs/figures/dashboard_screenshot.png)
+*(Screenshot placeholder: Streamlit interactive scheduling dashboard featuring metrics, Gantt charts, policy comparison, and publication figures)*
 
 ---
 
@@ -84,6 +99,8 @@ Execute a single simulation on a custom CSV or generate a synthetic trace:
 
 ```text
 ml-job-scheduler-sim/
+├── app/                    # Interactive Streamlit web application
+│   └── app.py              # Dashboard entry point
 ├── build.bat               # Compiles sim.exe, experiments.exe, and benchmark.exe
 ├── test.bat                # Automated test runner for unit and integration suites
 ├── data/                   # Workload configurations and sample job traces

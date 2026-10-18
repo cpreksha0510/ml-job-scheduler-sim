@@ -348,6 +348,14 @@ if %RC4% NEQ 0 (
 echo.
 
 REM ----------------------------------------------------------------------------
+REM  Test 6: CLI mode regression tests (5-job benchmark across policies & errors)
+REM ----------------------------------------------------------------------------
+echo --- Test 6: CLI mode regression tests ---
+python tests\test_cli.py
+call :check_result 0 %ERRORLEVEL% "CLI mode regression on 5-job benchmark"
+echo.
+
+REM ----------------------------------------------------------------------------
 REM  Summary
 REM ----------------------------------------------------------------------------
 echo ============================================================
